@@ -1,0 +1,17 @@
+# The pinned third-party checkouts. `scripts/setup_external.sh` recreates them; the
+# patches that go on top of them ARE tracked (external/patches/).
+external/*
+!external/patches/
+!external/patches/**
+
+__pycache__/
+*.py[co]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+.venv/
+venv/
+
+.DS_Store
+*.swp

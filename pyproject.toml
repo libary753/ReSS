@@ -1,0 +1,56 @@
+[project]
+name = "ress"
+version = "1.0.0"
+description = "ReSS: Residual-Restoring Sparse Attention for 3D Vision Transformers (with HeSS)"
+readme = "README.md"
+# Research / non-commercial. NOT permissive: parts of this tree derive from
+# SparseVGGT, which carries no licence of its own -- see the README.
+license = "CC-BY-NC-4.0"
+license-files = ["LICENSE"]
+requires-python = ">=3.10,<3.13"
+
+# NOT listed here, and deliberately so:
+#
+#   vggt / pi3 / depth_anything_3  -- not on PyPI. `scripts/setup_external.sh` clones each
+#       at a pinned commit into external/ and `ress/_pathsetup.py` puts them on sys.path.
+#   spas_sage_attn (SpargeAttn)    -- the block-sparse CUDA kernel every sparse mode runs
+#       on. It has to be compiled against your torch and a GPU of the right compute
+#       capability, which a dependency resolver cannot do; the same setup script builds it.
+#   pytorch3d                      -- only the CO3Dv2 loader behind the calibration script
+#       needs it, and it also has to be built locally. See README "Recalibrating".
+dependencies = [
+    "torch>=2.4",
+    "torchvision",
+    "numpy<2",          # the backbones do not support numpy 2
+    "einops>=0.8",
+    "huggingface-hub>=0.34",
+    "safetensors>=0.6",
+    "pillow>=10.3",
+    "omegaconf",
+    "addict",
+    "ninja>=1.11",      # build backend for the SpargeAttn extension
+]
+
+[project.optional-dependencies]
+# Only needed to REGENERATE the Fisher head-importance tables. The tables ship inside the
+# package (`ress/calibration/`), so using HeSS or ReSS needs none of this.
+calibrate = [
+    "opencv-python",
+    "open3d",
+    "scipy",
+    "tqdm",
+    "iopath",           # pytorch3d implicitron imports it at module level
+    "sqlalchemy",       # ... and its orm_types on the same chain
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ress"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = ["external"]

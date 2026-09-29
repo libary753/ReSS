@@ -1,0 +1,68 @@
+--- a/setup.py	2026-09-16 14:09:16.454348267 +0900
++++ b/setup.py
+@@ -147,7 +147,7 @@
+ 
+ # Add target compute capabilities to NVCC flags.
+ for capability in compute_capabilities:
+-    num = capability.replace(".", "")
++    num = capability[0] + capability[2]
+     if num == '90':
+         num = '90a'
+         HAS_SM90 = True
+--- a/spas_sage_attn/core.py	2026-09-16 14:09:16.454348267 +0900
++++ b/spas_sage_attn/core.py
+@@ -30,7 +30,7 @@
+     return cuda_archs
+ 
+ @torch.compiler.disable
+-def spas_sage_attn_meansim_cuda(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None, smooth_k=True, simthreshd1=0.6, cdfthreshd=0.98, pvthreshd=50, attention_sink=False, tensor_layout="HND", output_dtype=torch.float16, return_sparsity=False):
++def spas_sage_attn_meansim_cuda(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None, smooth_k=True, simthreshd1=0.6, cdfthreshd=0.98, pvthreshd=50, attention_sink=0, tensor_layout="HND", output_dtype=torch.float16, return_sparsity=False):
+     assert tensor_layout in ['HND', 'NHD']
+     if tensor_layout == 'NHD':
+         q, k, v = map(lambda t: rearrange(t, '... L H D -> ... H L D'), (q, k, v))
+@@ -130,7 +130,7 @@
+         return o
+ 
+ @torch.compiler.disable
+-def spas_sage2_attn_meansim_cuda(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None, smooth_k=True, simthreshd1=0.6, cdfthreshd=0.98, pvthreshd=50, attention_sink=False, tensor_layout="HND", output_dtype=torch.float16, return_sparsity=False):
++def spas_sage2_attn_meansim_cuda(q, k, v, attn_mask=None, dropout_p=0.0, is_causal=False, scale=None, smooth_k=True, simthreshd1=0.6, cdfthreshd=0.98, pvthreshd=50, attention_sink=0, tensor_layout="HND", output_dtype=torch.float16, return_sparsity=False):
+     assert tensor_layout in ['HND', 'NHD']
+     if tensor_layout == 'NHD':
+         q, k, v = map(lambda t: rearrange(t, '... L H D -> ... H L D'), (q, k, v))
+--- a/spas_sage_attn/quant_per_block.py	2026-09-16 14:07:37.518438986 +0900
++++ b/spas_sage_attn/quant_per_block.py
+@@ -83,7 +83,8 @@
+         stride_bz_q, stride_h_q, stride_seq_q,
+         stride_bz_qo, stride_h_qo, stride_seq_qo,
+         q_scale.stride(0), q_scale.stride(1),
+-        sm_scale=(sm_scale * 1.44269504),
++        # sm_scale=(sm_scale * 1.44269504),
++        sm_scale=1.0,  # add: change from the commented line to this to match get_block_map_meansim_fuse_quant()
+         C=head_dim, BLK=BLKQ
+     )
+ 
+--- a/spas_sage_attn/utils.py	2026-09-16 14:09:16.454348267 +0900
++++ b/spas_sage_attn/utils.py
+@@ -358,7 +358,9 @@
+         lut, valid_block_num = block_map_lut_triton(final_map)
+         return lut, valid_block_num
+ 
+-def get_block_map_meansim_fuse_quant(q, k, km=None, is_causal=False, BLKQ=128, BLKK=64, simthreshd1=0.1, cdfthreshd=0.9, is_sparse=True, return_lut=False, attention_sink=False):
++def get_block_map_meansim_fuse_quant(q, k, km=None, is_causal=False, BLKQ=128, BLKK=64, simthreshd1=0.1, cdfthreshd=0.9, is_sparse=True, return_lut=False, attention_sink=0):
++    # change: attention_sink was bool, now int 
++    # attention_sink (int) means how many tokens from the beginning of the sequence to sink 
+     Headnum = q.size(1)
+     simthreshd1 = hyperparameter_check(simthreshd1, Headnum, q.device)
+     cdfthreshd = hyperparameter_check(cdfthreshd, Headnum, q.device)
+@@ -391,8 +393,9 @@
+     if is_causal:
+         final_map = final_map * causal_mask[None, None, ...]
+ 
+-    if attention_sink:
+-        final_map[:, :, :, 0] = 1
++    if attention_sink > 0:
++        num_sink_blocks = (attention_sink + BLKK - 1) // BLKK
++        final_map[:, :, :, :num_sink_blocks] = 1
+     
+     if not return_lut:
+         return final_map, q_int8, q_scale, k_int8, k_scale
