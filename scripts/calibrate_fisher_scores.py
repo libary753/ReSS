@@ -139,7 +139,14 @@ def main():
     print(f"CO3Dv2 dev: {dataset.size()} scenes | backbone={backbone.name} "
           f"loss={args.loss} -> {out_path}")
 
-    model = backbone.load(device="cuda", aux_output=False, aux_full=False)
+    load_kw = dict(device="cuda", aux_output=False, aux_full=False)
+    if backbone.name == "vggt" and not args.no_checkpointing:
+        # `load_vggt` defaults to inference, where checkpointing buys nothing. This pass
+        # runs a backward, so ask for it: that call covers patch_embed and the frame
+        # blocks, and the loop below adds the global blocks. The other two backbones have
+        # no such flag -- all of their blocks come from `checkpointable_blocks`.
+        load_kw["checkpointing"] = True
+    model = backbone.load(**load_kw)
 
     # Only the sparsifiable blocks' QKV weights need gradients -- they are the ONLY thing
     # `accumulate_fisher_trace_scores` reads. Leaving the rest trainable makes autograd

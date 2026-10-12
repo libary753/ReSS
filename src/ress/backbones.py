@@ -60,8 +60,12 @@ def _load_da3(**kw):
 
 
 def _checkpointable_vggt(model):
-    """`load_vggt` already checkpoints the patch embedding and every frame block, so only
-    the global blocks are left to cover."""
+    """The global blocks only.
+
+    The patch embedding and the frame blocks are `load_vggt`'s to cover, via its
+    `checkpointing=True` -- which is NOT its default, so a caller that wants the whole
+    model checkpointed has to ask for it there as well as calling this
+    (`scripts/calibrate_fisher_scores.py` does both)."""
     from ress.models.wiring import global_blocks
     return list(global_blocks(model))
 

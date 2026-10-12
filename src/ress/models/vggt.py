@@ -143,7 +143,7 @@ def _apply_checkpointing(module):
     module.forward = new_forward
 
 
-def load_vggt(pretrained=VGGT_PRETRAINED, aux_output=False, aux_full=True, device="cuda", checkpointing=True):
+def load_vggt(pretrained=VGGT_PRETRAINED, aux_output=False, aux_full=True, device="cuda", checkpointing=False):
     """Load a fresh VGGT-1B and wire it for ReSS sparse/dense global attention.
     aux_output=True allocates a per-layer dict to receive `AttentionAux` (P^h, V̄,
     q_patch) on every forward call -- needed for damage/probe computation, skipped
@@ -154,11 +154,12 @@ def load_vggt(pretrained=VGGT_PRETRAINED, aux_output=False, aux_full=True, devic
     N_GLOBAL_BLOCKS layers simultaneously by the end of one forward pass (nothing
     frees layer i's entry when layer i+1 runs), a real OOM risk at high view counts
     that has nothing to do with the sparse attention computation itself
-    (measured on a 100-view CO3Dv2 scene). checkpointing=True
-    (default) wraps patch_embed + every frame/global block in `torch.utils.checkpoint`
-    -- negligible cost for
-    inference-only calls (checkpoint only recomputes on a backward pass, i.e. probe
-    passes), essential for any probe/calibration pass at real scene resolution."""
+    (measured on a 100-view CO3Dv2 scene).
+
+    checkpointing=True wraps patch_embed and every frame block in
+    `torch.utils.checkpoint`: it trades compute for memory on a BACKWARD pass, so turn
+    it on to differentiate through the model (`scripts/calibrate_fisher_scores.py` does,
+    and needs it to fit) and leave it off for inference, which has nothing to trade."""
     model = VGGT.from_pretrained(pretrained)
     aux_output_store = {i: {} for i in range(N_GLOBAL_BLOCKS)} if aux_output else None
     wire_vggt_aggregator(model, model.aggregator, aux_output_store, aux_full=aux_full)

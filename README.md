@@ -53,11 +53,13 @@ are unpatched.)
 ## Usage
 
 ```python
+import torch
 import ress
 
 model = ress.load_backbone("vggt")           # or "pi3", "da3"
 ress.apply_ress(model, sparse_ratio=0.1)
-predictions = model(images)
+with torch.no_grad():
+    predictions = model(images)
 ```
 
 `sparse_ratio` is the fraction of key blocks dropped. Each `apply_*` fully resets the
